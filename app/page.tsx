@@ -48,21 +48,13 @@ export default function SetupPage() {
     setDeckError('');
 
     try {
-      // Convert to base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]); // strip data:...;base64, prefix
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      // Send raw file as FormData — no base64 overhead, no body size limit issues
+      const fd = new FormData();
+      fd.append('file', file);
 
       const res = await fetch('/api/process-deck', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileBase64: base64, mimeType: file.type, fileName: file.name }),
+        body: fd,
       });
 
       if (!res.ok) throw new Error('Processing failed');

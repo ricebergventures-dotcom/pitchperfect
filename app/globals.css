@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rb-cyan: #61D1DC;
+  --rb-cyan-light: #B4E9E9;
+  --rb-charcoal: #242424;
+}
+
+body {
+  color: #ffffff;
+  background: #000000;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .rb-text-gradient {
+    background: linear-gradient(90deg, #ffffff 35.31%, #b4e9e9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .rb-text-cyan {
+    background: linear-gradient(135deg, #61D1DC, #B4E9E9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #61D1DC #111111;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #111111;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #61D1DC;
+  border-radius: 3px;
+}

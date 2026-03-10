@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/analyze-pitch/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

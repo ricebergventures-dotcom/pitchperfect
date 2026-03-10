@@ -16,20 +16,22 @@ export async function POST(req: NextRequest) {
     const html = generateEmailHTML(founderName, companyName, report, scores, date);
 
     const { data, error } = await resend.emails.send({
-      from: 'PitchPerfect <noreply@yourdomain.com>',
-      to: email,
-      subject: `Your PitchPerfect Analysis — ${companyName}`,
+      from: 'PitchPerfect <onboarding@resend.dev>',
+      to: 'pitchdeckriceberg@gmail.com',
+      subject: `PitchPerfect Analysis — ${companyName} (${founderName})`,
       html,
     });
 
     if (error) {
+      // Log but don't fail — report is already shown on screen
       console.error('Resend error:', error);
-      return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+      return NextResponse.json({ success: false, warning: 'Email could not be sent' });
     }
 
     return NextResponse.json({ success: true, id: data?.id });
   } catch (err) {
     console.error('Email error:', err);
-    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+    // Non-fatal — return success so report page doesn't crash
+    return NextResponse.json({ success: false, warning: 'Email could not be sent' });
   }
 }

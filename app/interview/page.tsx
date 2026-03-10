@@ -3,14 +3,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, SkipForward } from 'lucide-react';
+import { Mic, MicOff, SkipForward, Play } from 'lucide-react';
 import { useSession } from '@/lib/session-context';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
 import { TranscriptDisplay } from '@/components/TranscriptDisplay';
 import { QuestionCard } from '@/components/QuestionCard';
 import { createSpeechRecognition, speakText, stopSpeaking } from '@/lib/speech';
 
-type Phase = 'waiting' | 'speaking' | 'countdown' | 'listening' | 'transitioning' | 'processing';
+// Chrome requires speech synthesis to be triggered by a direct user gesture.
+// We show a "Begin Interview" button first, then start speaking on that click.
+type Phase = 'waiting' | 'begin' | 'speaking' | 'countdown' | 'listening' | 'transitioning' | 'processing';
 
 export default function InterviewPage() {
   const router = useRouter();
@@ -25,20 +27,25 @@ export default function InterviewPage() {
   const [manualAnswer, setManualAnswer] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const questionIndexRef = useRef(0);
-  const startedRef = useRef(false); // prevent double-init
+  const startedRef = useRef(false);
 
   useEffect(() => {
     if (!state.founderName) router.push('/');
   }, [state.founderName, router]);
 
-  // Only fires once when questions first arrive
+  // When questions arrive, show the "Begin" button (not auto-speak)
   useEffect(() => {
-    if (state.questions.length > 0 && !startedRef.current) {
+    if (state.questions.length > 0 && !startedRef.current && phase === 'waiting') {
       startedRef.current = true;
-      askQuestion(0);
+      setPhase('begin');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.questions]);
+
+  // Called from "Begin Interview" button click — user gesture enables speech synthesis
+  const handleBegin = () => {
+    askQuestion(0);
+  };
 
   const askQuestion = (idx: number) => {
     questionIndexRef.current = idx;
@@ -124,7 +131,6 @@ export default function InterviewPage() {
 
     const nextIdx = currentIdx + 1;
     if (nextIdx < state.questions.length) {
-      // Use 'transitioning' — NOT 'waiting', so the init useEffect doesn't re-fire
       setPhase('transitioning');
       setTimeout(() => askQuestion(nextIdx), 500);
     } else {
@@ -135,8 +141,6 @@ export default function InterviewPage() {
 
   const questions = state.questions;
   const currentQuestion = questions[questionIndex] || '';
-
-  const showSpinner = phase === 'waiting' || phase === 'transitioning';
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-black">
@@ -153,15 +157,16 @@ export default function InterviewPage() {
           <p className="font-bold text-xs uppercase tracking-widest" style={{ color: '#61D1DC' }}>VC Interview</p>
           <p className="text-white/40 text-xs">{state.companyName}</p>
         </div>
-        {questions.length > 0 && (
+        {questions.length > 0 && phase !== 'waiting' && phase !== 'begin' && (
           <p className="text-white/40 text-xs font-mono">{questionIndex + 1} / {questions.length}</p>
         )}
       </div>
 
       <div className="w-full max-w-2xl space-y-8 pt-16">
         <AnimatePresence mode="wait">
-          {/* Waiting for questions / transitioning between questions */}
-          {showSpinner && (
+
+          {/* Waiting for questions to load */}
+          {phase === 'waiting' && (
             <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center space-y-4">
               <motion.div
                 animate={{ rotate: 360 }}
@@ -169,9 +174,52 @@ export default function InterviewPage() {
                 className="w-12 h-12 rounded-full border-2 border-t-transparent mx-auto"
                 style={{ borderColor: '#61D1DC', borderTopColor: 'transparent' }}
               />
-              <p className="text-white/40 text-sm">
-                {phase === 'waiting' ? 'Preparing your interview questions...' : 'Next question...'}
-              </p>
+              <p className="text-white/40 text-sm">Preparing your interview questions...</p>
+            </motion.div>
+          )}
+
+          {/* Begin screen — requires user click to enable speech synthesis */}
+          {phase === 'begin' && (
+            <motion.div
+              key="begin"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="text-center space-y-6"
+            >
+              <div>
+                <p className="text-white/40 text-xs uppercase tracking-widest font-semibold mb-2">Ready</p>
+                <h2 className="text-2xl font-bold text-white">Your {questions.length} questions are ready</h2>
+                <p className="text-white/40 text-sm mt-2">
+                  The AI interviewer will read each question aloud. Answer verbally, then click Next.
+                </p>
+              </div>
+
+              <motion.button
+                onClick={handleBegin}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-3 mx-auto px-8 py-4 rounded-xl font-bold text-black text-sm tracking-wide"
+                style={{ background: '#61D1DC', boxShadow: '0 0 40px rgba(97,209,220,0.3)' }}
+              >
+                <Play className="w-5 h-5 fill-black" />
+                Begin Interview
+              </motion.button>
+
+              <p className="text-white/20 text-xs">Make sure your volume is turned up</p>
+            </motion.div>
+          )}
+
+          {/* Transitioning between questions */}
+          {phase === 'transitioning' && (
+            <motion.div key="transitioning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center space-y-4">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+                className="w-10 h-10 rounded-full border-2 border-t-transparent mx-auto"
+                style={{ borderColor: '#61D1DC', borderTopColor: 'transparent' }}
+              />
+              <p className="text-white/40 text-sm">Next question...</p>
             </motion.div>
           )}
 
@@ -226,7 +274,6 @@ export default function InterviewPage() {
                 totalQuestions={questions.length}
                 isSpeaking={false}
               />
-
               <div className="flex flex-col items-center gap-3">
                 <motion.div
                   animate={{ scale: [1, 1.08, 1] }}

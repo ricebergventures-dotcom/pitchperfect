@@ -77,26 +77,32 @@ export default function ReportPage() {
       });
       const { report } = await analysisRes.json();
 
+      if (!report) throw new Error('Empty report from API');
       const scores = extractScores(report);
       dispatch({ type: 'SET_REPORT', payload: { report, scores } });
 
+      // Email is best-effort — never block the report display
       setPhase('sending');
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          founderName: state.founderName,
-          email: state.email,
-          companyName: state.companyName,
-          report,
-          scores,
-        }),
-      });
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            founderName: state.founderName,
+            email: state.email,
+            companyName: state.companyName,
+            report,
+            scores,
+          }),
+        });
+      } catch (emailErr) {
+        console.warn('Email failed (non-fatal):', emailErr);
+      }
 
       setPhase('done');
     } catch (err) {
       console.error(err);
-      setError('Something went wrong. Please try again.');
+      setError('Could not generate your report. Please try again.');
       setPhase('error');
     }
   };
@@ -192,7 +198,7 @@ export default function ReportPage() {
                 <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: '#61D1DC' }} />
                 <div>
                   <p className="font-semibold text-sm" style={{ color: '#61D1DC' }}>Analysis Complete</p>
-                  <p className="text-white/40 text-xs">Report sent to {state.email}</p>
+                  <p className="text-white/40 text-xs">Your report has been submitted for review</p>
                 </div>
               </div>
 

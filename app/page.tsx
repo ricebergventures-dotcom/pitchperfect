@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Mic, ArrowRight } from 'lucide-react';
 import { useSession } from '@/lib/session-context';
 
-const CATEGORIES = ['SaaS', 'Consumer', 'Deeptech', 'Marketplace', 'Other'];
+const CATEGORIES = ['Life Science', 'Future of Compute', 'Climate Tech', 'Spacetech', 'Cybersecurity', 'Quantum', 'Other'];
 
 export default function SetupPage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function SetupPage() {
     founderName: '',
     email: '',
     companyName: '',
-    category: 'SaaS',
+    category: 'Life Science',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -146,7 +146,7 @@ export default function SetupPage() {
               <label className="block text-xs font-semibold text-white/50 uppercase tracking-widest mb-2">
                 Pitch Category
               </label>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {CATEGORIES.map((cat) => (
                   <button
                     key={cat}

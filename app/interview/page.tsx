@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, SkipForward } from 'lucide-react';
 import { useSession } from '@/lib/session-context';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
 import { TranscriptDisplay } from '@/components/TranscriptDisplay';
@@ -24,6 +24,8 @@ export default function InterviewPage() {
   const [speechSupported, setSpeechSupported] = useState(true);
   const [manualAnswer, setManualAnswer] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // Ref to avoid stale closures in async callbacks
+  const questionIndexRef = useRef(0);
 
   useEffect(() => {
     if (!state.founderName) router.push('/');
@@ -37,6 +39,7 @@ export default function InterviewPage() {
   }, [state.questions, phase]);
 
   const askQuestion = (idx: number) => {
+    questionIndexRef.current = idx;
     setQuestionIndex(idx);
     setAnswer('');
     setInterimAnswer('');
@@ -46,11 +49,14 @@ export default function InterviewPage() {
 
     speakText(state.questions[idx], () => {
       setIsSpeaking(false);
-      startCountdown();
+      setPhase('countdown');
+      setCountdown(3);
     });
   };
 
-  const startCountdown = () => {
+  const handleSkipSpeaking = () => {
+    stopSpeaking();
+    setIsSpeaking(false);
     setPhase('countdown');
     setCountdown(3);
   };
@@ -68,6 +74,9 @@ export default function InterviewPage() {
   }, [countdown, phase]);
 
   const startListening = () => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+
     const recognition = createSpeechRecognition();
     if (!recognition) { setSpeechSupported(false); return; }
     recognitionRef.current = recognition;
@@ -84,24 +93,40 @@ export default function InterviewPage() {
     };
 
     recognition.onerror = (_event: SpeechRecognitionErrorEvent) => setSpeechSupported(false);
+
+    // Auto-restart if it ends prematurely while still listening
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        try { recognition.start(); } catch { /* already stopped */ }
+      }
+    };
+
     recognition.start();
   };
 
   const handleNextQuestion = () => {
-    recognitionRef.current?.stop();
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (rec) {
+      rec.onend = null;
+      try { rec.stop(); } catch { /* ignore */ }
+    }
     stopSpeaking();
 
     const finalAnswer = answer + interimAnswer + manualAnswer;
+    const currentIdx = questionIndexRef.current;
+
     dispatch({
       type: 'ADD_QA',
-      payload: { question: state.questions[questionIndex], answer: finalAnswer },
+      payload: { question: state.questions[currentIdx], answer: finalAnswer },
     });
 
-    if (questionIndex + 1 < state.questions.length) {
-      setTimeout(() => askQuestion(questionIndex + 1), 500);
+    if (currentIdx + 1 < state.questions.length) {
+      setPhase('loading');
+      setTimeout(() => askQuestion(currentIdx + 1), 600);
     } else {
       setPhase('processing');
-      router.push('/report');
+      setTimeout(() => router.push('/report'), 500);
     }
   };
 
@@ -110,7 +135,6 @@ export default function InterviewPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-black">
-      {/* Subtle glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
           className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] opacity-5"
@@ -125,9 +149,7 @@ export default function InterviewPage() {
           <p className="text-white/40 text-xs">{state.companyName}</p>
         </div>
         {questions.length > 0 && (
-          <p className="text-white/40 text-xs font-mono">
-            {questionIndex + 1} / {questions.length}
-          </p>
+          <p className="text-white/40 text-xs font-mono">{questionIndex + 1} / {questions.length}</p>
         )}
       </div>
 
@@ -146,15 +168,31 @@ export default function InterviewPage() {
             </motion.div>
           )}
 
+          {/* Speaking — AI reads question aloud */}
+          {phase === 'speaking' && (
+            <motion.div key="speaking" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <QuestionCard
+                question={currentQuestion}
+                questionNumber={questionIndex + 1}
+                totalQuestions={questions.length}
+                isSpeaking={isSpeaking}
+              />
+              <div className="text-center">
+                <button
+                  onClick={handleSkipSpeaking}
+                  className="flex items-center gap-2 mx-auto px-4 py-2 rounded-lg text-sm font-medium text-white/40 hover:text-white/70 transition-colors"
+                  style={{ border: '1px solid #1e1e1e' }}
+                >
+                  <SkipForward className="w-4 h-4" />
+                  Skip — I&apos;m ready to answer
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Countdown */}
           {phase === 'countdown' && (
-            <motion.div
-              key="countdown"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center"
-            >
+            <motion.div key="countdown" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="text-center space-y-6">
               <QuestionCard
                 question={currentQuestion}
                 questionNumber={questionIndex + 1}
@@ -165,22 +203,10 @@ export default function InterviewPage() {
                 key={countdown}
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="text-6xl font-black rb-text-cyan mt-8"
+                className="text-6xl font-black rb-text-cyan mt-4"
               >
                 {countdown === 0 ? 'Speak!' : countdown}
               </motion.div>
-            </motion.div>
-          )}
-
-          {/* Speaking */}
-          {phase === 'speaking' && (
-            <motion.div key="speaking" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <QuestionCard
-                question={currentQuestion}
-                questionNumber={questionIndex + 1}
-                totalQuestions={questions.length}
-                isSpeaking={isSpeaking}
-              />
             </motion.div>
           )}
 
@@ -199,17 +225,9 @@ export default function InterviewPage() {
                   animate={{ scale: [1, 1.08, 1] }}
                   transition={{ repeat: Infinity, duration: 2 }}
                   className="w-14 h-14 rounded-full flex items-center justify-center"
-                  style={{
-                    background: 'linear-gradient(135deg, #61D1DC18, #61D1DC08)',
-                    border: '2px solid #61D1DC',
-                    boxShadow: '0 0 30px rgba(97,209,220,0.15)',
-                  }}
+                  style={{ background: 'linear-gradient(135deg, #61D1DC18, #61D1DC08)', border: '2px solid #61D1DC', boxShadow: '0 0 30px rgba(97,209,220,0.15)' }}
                 >
-                  {speechSupported ? (
-                    <Mic className="w-6 h-6" style={{ color: '#61D1DC' }} />
-                  ) : (
-                    <MicOff className="w-6 h-6 text-white/40" />
-                  )}
+                  {speechSupported ? <Mic className="w-6 h-6" style={{ color: '#61D1DC' }} /> : <MicOff className="w-6 h-6 text-white/40" />}
                 </motion.div>
                 <WaveformVisualizer isActive={speechSupported} />
               </div>

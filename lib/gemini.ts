@@ -7,17 +7,23 @@ export const geminiPro = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 export async function generateQuestions(
   pitchTranscript: string,
   companyName: string,
-  category: string
+  category: string,
+  deckSummary?: string
 ): Promise<string[]> {
+  const deckContext = deckSummary
+    ? `\n\nPITCH DECK ANALYSIS:\n${deckSummary}\n\nUse both the spoken pitch AND the deck analysis to craft highly specific questions. Reference actual details from the deck (metrics, team names, product features, market claims) where relevant.`
+    : '';
+
   const prompt = `You are an experienced venture capitalist conducting a pitch interview.
-The founder just gave this pitch: ${pitchTranscript}
-Company: ${companyName}, Category: ${category}
-Generate exactly 5 incisive follow-up questions to probe deeper into:
-1. Business model and monetization
-2. Market size and competition
-3. Team and unfair advantages
-4. Traction and metrics
-5. Use of funds / next milestones
+The founder just gave this spoken pitch: ${pitchTranscript || '(no spoken pitch provided)'}
+Company: ${companyName}, Category: ${category}${deckContext}
+
+Generate exactly 5 incisive, highly specific follow-up questions tailored to THIS company's pitch. Do NOT ask generic questions — every question must reference specific details from what was said or shown. Cover:
+1. Business model and monetization (probe a specific claim made)
+2. Market size and competition (challenge a specific number or assumption)
+3. Team and unfair advantages (dig into a specific person or credential mentioned)
+4. Traction and metrics (push for specifics on a claim made)
+5. Use of funds / next milestones (tie to specific goals mentioned)
 
 Return ONLY valid JSON with no markdown: { "questions": ["q1", "q2", "q3", "q4", "q5"] }`;
 
@@ -32,7 +38,8 @@ export async function analyzePitch(
   pitchTranscript: string,
   companyName: string,
   category: string,
-  qaSession: { question: string; answer: string }[]
+  qaSession: { question: string; answer: string }[],
+  deckSummary?: string
 ): Promise<string> {
   const qaText = qaSession
     .map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`)
@@ -42,7 +49,7 @@ export async function analyzePitch(
 
 INITIAL PITCH: ${pitchTranscript}
 COMPANY: ${companyName}
-CATEGORY: ${category}
+CATEGORY: ${category}${deckSummary ? `\n\nPITCH DECK ANALYSIS:\n${deckSummary}` : ''}
 
 Q&A SESSION:
 ${qaText}

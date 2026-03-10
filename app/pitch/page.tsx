@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mic, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import { useSession } from '@/lib/session-context';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
 import { TranscriptDisplay } from '@/components/TranscriptDisplay';
@@ -84,6 +84,7 @@ export default function PitchPage() {
         pitchTranscript: finalTranscript,
         companyName: state.companyName,
         category: state.category,
+        deckSummary: state.deckSummary || undefined,
       }),
     })
       .then((r) => r.json())
@@ -94,11 +95,15 @@ export default function PitchPage() {
       .catch(console.error);
   };
 
+  // Also pass deckSummary when navigating to report
+  useEffect(() => {
+    // keep deckSummary in session for analyze-pitch route
+  }, []);
+
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-black">
-      {/* Subtle cyan glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] opacity-5"
@@ -112,16 +117,30 @@ export default function PitchPage() {
           <p className="font-bold text-sm tracking-wide" style={{ color: '#61D1DC' }}>{state.companyName}</p>
           <p className="text-white/40 text-xs">{state.founderName}</p>
         </div>
-        {phase === 'listening' && (
-          <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: '#1a0000', border: '1px solid #3d0000' }}>
+        <div className="flex items-center gap-3">
+          {/* Deck badge */}
+          {state.deckFileName && phase === 'listening' && (
             <motion.div
-              animate={{ opacity: [1, 0, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              className="w-2 h-2 rounded-full bg-red-500"
-            />
-            <span className="text-red-400 text-xs font-mono font-semibold">{formatTime(elapsed)}</span>
-          </div>
-        )}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+              style={{ background: '#001a12', border: '1px solid #003d28', color: '#61D1DC' }}
+            >
+              <FileText className="w-3 h-3" />
+              Deck ready
+            </motion.div>
+          )}
+          {phase === 'listening' && (
+            <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: '#1a0000', border: '1px solid #3d0000' }}>
+              <motion.div
+                animate={{ opacity: [1, 0, 1] }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+                className="w-2 h-2 rounded-full bg-red-500"
+              />
+              <span className="text-red-400 text-xs font-mono font-semibold">{formatTime(elapsed)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -144,6 +163,11 @@ export default function PitchPage() {
               {countdown === 0 ? 'Speak!' : countdown}
             </motion.div>
             <p className="text-white/40 text-lg font-medium">Get ready to pitch {state.companyName}</p>
+            {state.deckFileName && (
+              <p className="text-xs mt-2" style={{ color: '#61D1DC' }}>
+                Deck analyzed — questions will be tailored to your slides
+              </p>
+            )}
           </motion.div>
         )}
 
@@ -169,11 +193,7 @@ export default function PitchPage() {
                 animate={{ scale: [1, 1.08, 1] }}
                 transition={{ repeat: Infinity, duration: 2 }}
                 className="w-20 h-20 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, #61D1DC20, #61D1DC10)',
-                  border: '2px solid #61D1DC',
-                  boxShadow: '0 0 40px rgba(97,209,220,0.2)',
-                }}
+                style={{ background: 'linear-gradient(135deg, #61D1DC20, #61D1DC10)', border: '2px solid #61D1DC', boxShadow: '0 0 40px rgba(97,209,220,0.2)' }}
               >
                 <Mic className="w-9 h-9" style={{ color: '#61D1DC' }} />
               </motion.div>
@@ -224,7 +244,11 @@ export default function PitchPage() {
               style={{ borderColor: '#61D1DC', borderTopColor: 'transparent' }}
             />
             <h2 className="text-2xl font-bold text-white">Processing your pitch...</h2>
-            <p className="text-white/40">Generating intelligent follow-up questions</p>
+            <p className="text-white/40">
+              {state.deckSummary
+                ? 'Combining your deck and speech to generate tailored questions...'
+                : 'Generating intelligent follow-up questions...'}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

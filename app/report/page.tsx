@@ -72,6 +72,7 @@ export default function ReportPage() {
           companyName: state.companyName,
           category: state.category,
           qaSession: state.qaSession,
+          deckSummary: state.deckSummary || undefined,
         }),
       });
       const { report } = await analysisRes.json();

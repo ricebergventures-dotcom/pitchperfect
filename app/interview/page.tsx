@@ -10,13 +10,13 @@ import { TranscriptDisplay } from '@/components/TranscriptDisplay';
 import { QuestionCard } from '@/components/QuestionCard';
 import { createSpeechRecognition, speakText, stopSpeaking } from '@/lib/speech';
 
-type Phase = 'loading' | 'speaking' | 'countdown' | 'listening' | 'processing';
+type Phase = 'waiting' | 'speaking' | 'countdown' | 'listening' | 'transitioning' | 'processing';
 
 export default function InterviewPage() {
   const router = useRouter();
   const { state, dispatch } = useSession();
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [phase, setPhase] = useState<Phase>('loading');
+  const [phase, setPhase] = useState<Phase>('waiting');
   const [countdown, setCountdown] = useState(3);
   const [answer, setAnswer] = useState('');
   const [interimAnswer, setInterimAnswer] = useState('');
@@ -24,19 +24,21 @@ export default function InterviewPage() {
   const [speechSupported, setSpeechSupported] = useState(true);
   const [manualAnswer, setManualAnswer] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  // Ref to avoid stale closures in async callbacks
   const questionIndexRef = useRef(0);
+  const startedRef = useRef(false); // prevent double-init
 
   useEffect(() => {
     if (!state.founderName) router.push('/');
   }, [state.founderName, router]);
 
+  // Only fires once when questions first arrive
   useEffect(() => {
-    if (state.questions.length > 0 && phase === 'loading') {
+    if (state.questions.length > 0 && !startedRef.current) {
+      startedRef.current = true;
       askQuestion(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.questions, phase]);
+  }, [state.questions]);
 
   const askQuestion = (idx: number) => {
     questionIndexRef.current = idx;
@@ -94,7 +96,6 @@ export default function InterviewPage() {
 
     recognition.onerror = (_event: SpeechRecognitionErrorEvent) => setSpeechSupported(false);
 
-    // Auto-restart if it ends prematurely while still listening
     recognition.onend = () => {
       if (recognitionRef.current === recognition) {
         try { recognition.start(); } catch { /* already stopped */ }
@@ -121,9 +122,11 @@ export default function InterviewPage() {
       payload: { question: state.questions[currentIdx], answer: finalAnswer },
     });
 
-    if (currentIdx + 1 < state.questions.length) {
-      setPhase('loading');
-      setTimeout(() => askQuestion(currentIdx + 1), 600);
+    const nextIdx = currentIdx + 1;
+    if (nextIdx < state.questions.length) {
+      // Use 'transitioning' — NOT 'waiting', so the init useEffect doesn't re-fire
+      setPhase('transitioning');
+      setTimeout(() => askQuestion(nextIdx), 500);
     } else {
       setPhase('processing');
       setTimeout(() => router.push('/report'), 500);
@@ -132,6 +135,8 @@ export default function InterviewPage() {
 
   const questions = state.questions;
   const currentQuestion = questions[questionIndex] || '';
+
+  const showSpinner = phase === 'waiting' || phase === 'transitioning';
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden bg-black">
@@ -155,20 +160,22 @@ export default function InterviewPage() {
 
       <div className="w-full max-w-2xl space-y-8 pt-16">
         <AnimatePresence mode="wait">
-          {/* Loading */}
-          {phase === 'loading' && (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-4">
+          {/* Waiting for questions / transitioning between questions */}
+          {showSpinner && (
+            <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center space-y-4">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
                 className="w-12 h-12 rounded-full border-2 border-t-transparent mx-auto"
                 style={{ borderColor: '#61D1DC', borderTopColor: 'transparent' }}
               />
-              <p className="text-white/40 text-sm">Preparing your interview questions...</p>
+              <p className="text-white/40 text-sm">
+                {phase === 'waiting' ? 'Preparing your interview questions...' : 'Next question...'}
+              </p>
             </motion.div>
           )}
 
-          {/* Speaking — AI reads question aloud */}
+          {/* AI speaks the question aloud */}
           {phase === 'speaking' && (
             <motion.div key="speaking" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <QuestionCard
